@@ -1,0 +1,1896 @@
+{
+  "source": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm",
+  "commit": "5281e49908960f490c8faa789eee221d4ab5001d",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6 | packaged by Anaconda, Inc. | (main, Jul  9 2026, 14:29:05) [MSC v.1942 64 bit (AMD64)]",
+  "elapsedSeconds": 47.756,
+  "summary": {
+    "root": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm",
+    "files": 4962,
+    "symbols": 121860,
+    "relationships": 478216,
+    "errors": [],
+    "elapsedMs": 41787
+  },
+  "checks": {
+    "find_scheduler": true,
+    "members_methods_and_file": true,
+    "scheduler_owns_kv_cache_manager": true,
+    "inheritance_includes_focus": true,
+    "schedule_call_graph": true,
+    "allocate_slots_resolved": true,
+    "allocate_slots_source_location": true,
+    "search_kv_cache_manager": true,
+    "current_symbol_context": true,
+    "progress_from_separate_process": true,
+    "find_EngineCore": true,
+    "find_Executor": true
+  },
+  "evidence": {
+    "scheduler": {
+      "id": "1539ae821aff0f6e9fe6",
+      "kind": "class",
+      "name": "Scheduler",
+      "qualifiedName": "vllm.v1.core.sched.scheduler.Scheduler",
+      "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+      "startLine": 84,
+      "endLine": 3408,
+      "parentId": "131e0482c8f2725c84c5",
+      "moduleId": "131e0482c8f2725c84c5",
+      "details": {
+        "docstring": null,
+        "bases": [
+          "SchedulerInterface"
+        ],
+        "decorators": []
+      }
+    },
+    "schedule": {
+      "id": "be61a94f35c34a65f548",
+      "kind": "method",
+      "name": "schedule",
+      "qualifiedName": "vllm.v1.core.sched.scheduler.Scheduler.schedule",
+      "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+      "startLine": 577,
+      "endLine": 1539,
+      "parentId": "1539ae821aff0f6e9fe6",
+      "moduleId": "131e0482c8f2725c84c5",
+      "details": {
+        "docstring": null,
+        "decorators": [],
+        "parameters": [
+          {
+            "name": "self",
+            "annotation": null
+          },
+          {
+            "name": "throttle_prefills",
+            "annotation": "bool"
+          }
+        ],
+        "returnAnnotation": "SchedulerOutput"
+      }
+    },
+    "allocateSlots": [
+      {
+        "id": "eaab4a3a91781e31b9d0",
+        "kind": "method",
+        "name": "allocate_slots",
+        "qualifiedName": "vllm.v1.core.kv_cache_manager.KVCacheManager.allocate_slots",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\kv_cache_manager.py",
+        "startLine": 371,
+        "endLine": 618,
+        "parentId": "909c654caa18c77376b7",
+        "moduleId": "68fa19a2469aa7e4e9bd",
+        "details": {
+          "docstring": "Add slots for a request with new tokens to append.\n\n        Args:\n            request: The request to allocate slots.\n            num_new_tokens: The number of new tokens to be allocated and computed.\n            num_new_computed_tokens: The number of new computed tokens just\n                hitting the prefix caching, excluding external tokens.\n            new_computed_blocks: The cached blocks for the above new computed\n                tokens, grouped as a tuple by kv cache groups.\n            num_lookahead_tokens: The number of speculative tokens to allocate.\n                This is used by spec decode proposers with kv-cache such\n                as eagle.\n            num_external_computed_tokens: The number of tokens that their\n                KV caches are not cached by vLLM but cached by the connector.\n            delay_cache_blocks: Whether to skip caching the blocks. This is\n                used by P/D when allocating blocks used in a KV transfer\n                which will complete in a future step.\n            num_encoder_tokens: The number of encoder tokens to allocate for\n                cross-attention in encoder-decoder models(e.g., Whisper).\n                For decoder-only models, this should be 0.\n            full_sequence_must_fit: Only allocate blocks if the KV cache has enough\n                free blocks to hold the full sequence, accounting for prefix cache hits\n                and sliding window. Used as an admission gate to prevent over-admitting\n                requests when chunked prefill would otherwise only check the first chunk\n            reserved_blocks: Number of free blocks that must be left available for\n                other in-flight sequences to complete. The actual allocation is only\n                made if it fits within (free blocks - reserved_blocks). Used to gate\n                async KV-connector loads so their initial allocation cannot consume\n                blocks an already in-flight (prefilling) sequence is relying on.\n            has_scheduled_reqs: Whether any requests are already scheduled to run\n                this step, controls whether watermark is applied.\n            skip_zeroing_group_ids: Groups whose external-token blocks will be\n                written by an async load and must not be zeroed concurrently.\n\n        Blocks layout:\n        ```\n        ----------------------------------------------------------------------\n        | < comp > | < new_comp > | < ext_comp >  | < new >  | < lookahead > |\n        ----------------------------------------------------------------------\n                                                  |   < to be computed >     |\n        ----------------------------------------------------------------------\n                                  |            < to be allocated >           |\n        ----------------------------------------------------------------------\n                                  | < to be cached (roughly, |\n                                  | details below)>          |\n        ----------------------------------------------------------------------\n        | Prefix-cached tokens from either vLLM   |\n        | or connector. Can be safely removed if  |\n        | they are outside sliding window.        |\n        ----------------------------------------------------------------------\n        |   < cached by vLLM >    | not cached by |\n                                  | vLLM, but     |\n        | ref_cnt  | ref_cnt not  | cached by     |\n        | increased| increased yet| connector     |\n        ----------------------------------------------------------------------\n        ```\n\n        Abbreviations:\n\n        ```\n        comp      = request.num_computed_tokens\n        new_comp  = num_new_computed_tokens\n                  = len(new_computed_blocks) * block_size\n        ext_comp  = num_external_computed_tokens, cached by the connector\n        new       = num_new_tokens, including unverified draft tokens\n        lookahead = num_lookahead_tokens\n        ```\n\n        NOTE: for new tokens which include both verified and unverified draft\n        tokens, we only cache the verified tokens (by capping the number at\n        `request.num_tokens`).\n\n        The allocation has three stages:\n        - Free unnecessary blocks in `comp` and check\n           if we have sufficient free blocks (return None if not).\n        - Handle prefix tokens (`comp + new_comp + ext_comp`):\n            - Free unnecessary blocks (e.g. outside sliding window)\n            - Allocate new blocks for `ext_comp` tokens inside\n              sliding window\n        - Allocate new blocks for tokens to be computed (`new + lookahead`)\n\n        Returns:\n            A list of new allocated blocks.\n\n        ",
+          "decorators": [],
+          "parameters": [
+            {
+              "name": "self",
+              "annotation": null
+            },
+            {
+              "name": "request",
+              "annotation": "Request"
+            },
+            {
+              "name": "num_new_tokens",
+              "annotation": "int"
+            },
+            {
+              "name": "num_new_computed_tokens",
+              "annotation": "int"
+            },
+            {
+              "name": "new_computed_blocks",
+              "annotation": "KVCacheBlocks | None"
+            },
+            {
+              "name": "num_lookahead_tokens",
+              "annotation": "int"
+            },
+            {
+              "name": "num_external_computed_tokens",
+              "annotation": "int"
+            },
+            {
+              "name": "delay_cache_blocks",
+              "annotation": "bool"
+            },
+            {
+              "name": "num_encoder_tokens",
+              "annotation": "int"
+            },
+            {
+              "name": "full_sequence_must_fit",
+              "annotation": "bool"
+            },
+            {
+              "name": "reserved_blocks",
+              "annotation": "int"
+            },
+            {
+              "name": "has_scheduled_reqs",
+              "annotation": "bool"
+            },
+            {
+              "name": "skip_zeroing_group_ids",
+              "annotation": "tuple[int, ...]"
+            }
+          ],
+          "returnAnnotation": "KVCacheBlocks | None"
+        }
+      }
+    ],
+    "schedulerOwns": [
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "kv_metrics_collector",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 109
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "finished_req_ids_dict",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 122
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "prev_step_scheduled_req_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 126
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "connector",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 164
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "connector_prefix_cache_stats",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 165
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "kv_event_publisher",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 196
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "ec_connector",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 200
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "requests",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 214
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": "a8be8499643f383ddba3",
+        "type": "owns",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "policy",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 217
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "waiting",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 223
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "kv_holding_waiting",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 227
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "deferred_waiting",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 230
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "running",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 231
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "finished_req_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 237
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "reset_preempted_req_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 240
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "num_waiting_for_streaming_input",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 244
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "finished_recving_kv_req_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 247
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "failed_recving_kv_req_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 248
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "grammar_compile_error_reqs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 252
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "encoder_cache_mismatch_reqs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 253
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "encoder_cache_manager",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 282
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "use_eagle",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 286
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "use_eagle_block_drop",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 287
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "dynamic_sd_lookup",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 303
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": "909c654caa18c77376b7",
+        "type": "owns",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "kv_cache_manager",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 324
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "mamba_prefill_checkpoint_alignment",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 367
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "deferred_frees",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 403
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "perf_metrics",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 405
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": "b3b677d6485bf4c7aa4c",
+        "type": "owns",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "_pause_state",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 416
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "_inflight_prefills",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 420
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "_kv_fetch_stages",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 424
+      },
+      {
+        "sourceId": "1539ae821aff0f6e9fe6",
+        "targetId": null,
+        "type": "owns",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "_kv_fetch_counts",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 427
+      }
+    ],
+    "callEdges": [
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "time.monotonic",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 616
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "406644caabc7cc5f3f8c",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.new_step_starts",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 618
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "any",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 624
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d671d7ec47c9eb99d16c",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self.get_request_counts",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 629
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "max",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 639
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 645
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.ec_connector.ensure_cache_available",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 681
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "min",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 696
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "min",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 702
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "5e6e68d93c42786f3850",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._mamba_block_aligned_split",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 711
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2ed09b99b5ffc350f587",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._try_schedule_encoder_inputs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 727
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "7ed09ed197c49728d669",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._reserve_prefill_lookahead",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 737
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d41b039e1828cf4c2d75",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "record_function_or_nullcontext",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 762
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "eaab4a3a91781e31b9d0",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.allocate_slots",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 764
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.connector.has_pending_block_frees",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 776
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "max",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 783
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "62a19534da6279a14cf0",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._request_blocks_can_be_freed",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 791
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.running.index",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 795
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_running_reqs.remove",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 802
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "num_scheduled_tokens.pop",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 803
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "req_to_new_blocks.pop",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 806
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_spec_decode_tokens.pop",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 807
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_encoder_inputs.pop",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 808
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "sum",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 814
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "preempted_req.get_num_encoder_embeds",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 815
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.running.pop",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 820
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "753a5b596fa9cd22211b",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._preempt_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 822
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "preempted_reqs.append",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 827
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_running_reqs.append",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 837
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 856
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "e8627d7cf12ae19f9025",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._allocate_encoder_inputs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 869
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "set",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 876
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "set",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 878
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 883
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "deque",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 887
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "deque",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 888
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 905
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "request_queue.peek_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 909
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "a1d3ae3b61be6165ca8c",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._handle_blocked_waiting_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 912
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 914
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 921
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 929
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 934
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d58a78631a9aad774897",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._get_local_prefix_cache_hit",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 950
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.connector.get_num_new_matched_tokens",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 962
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 973
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "7c591d13ae85137b9b83",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.truncate_computed_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 993
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "e02fb815379c5ed3f7cc",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.get_computed_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1017
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "a17bc618c845463447fd",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._ec_transfer_pending",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1042
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1043
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "request.prefill_stats.set",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1049
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2a7cf2f74b4036c5a6d9",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._set_kv_fetch_stage",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1054
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "a17bc618c845463447fd",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._ec_transfer_pending",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1066
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1067
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "min",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1090
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d9fe50151b308c40cbf3",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._mark_prefix_replay",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1093
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "min",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1141
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "5e6e68d93c42786f3850",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._mamba_block_aligned_split",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1146
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2ed09b99b5ffc350f587",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._try_schedule_encoder_inputs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1175
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "7ed09ed197c49728d669",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._reserve_prefill_lookahead",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1185
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "sum",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1208
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "request.get_num_encoder_embeds",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1209
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "a4c618680f177162a74e",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._inflight_prefill_reserved_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1221
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2dc9c76c994e5dab243a",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._spec_decode_step_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1222
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "max",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1227
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "eaab4a3a91781e31b9d0",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.allocate_slots",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1228
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.connector.get_loaded_kv_cache_group_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1237
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "bool",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1244
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.encoder_cache_manager.free",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1253
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.connector.update_state_after_alloc",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1261
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "f1c2b73bf3f93885e746",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.get_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1263
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.connector_prefix_cache_stats.record",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1271
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.connector.get_external_cache_hit_sources",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1278
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "7082c9f22200174a69e3",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.record_prefix_cache_stats",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1288
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self._inflight_prefills.add",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1310
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2a7cf2f74b4036c5a6d9",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._set_kv_fetch_stage",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1311
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "skip_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1312
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "request_queue.pop_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1315
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.deferred_waiting.discard",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1316
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.running.append",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1317
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "request.record_event",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1322
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_new_reqs.append",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1326
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_resumed_reqs.append",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1328
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "RuntimeError",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1330
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_loras.add",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1333
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "f1c2b73bf3f93885e746",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.get_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1334
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2a7cf2f74b4036c5a6d9",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._set_kv_fetch_stage",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1342
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self._inflight_prefills.add",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1350
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "e8627d7cf12ae19f9025",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._allocate_encoder_inputs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1356
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.kv_holding_waiting.prepend_requests",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1365
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.waiting.prepend_requests",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1367
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d671d7ec47c9eb99d16c",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self.get_request_counts",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1372
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1373
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "sum",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1376
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "num_scheduled_tokens.values",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1376
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1381
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1385
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1387
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1391
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d41b039e1828cf4c2d75",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "record_function_or_nullcontext",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1392
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "e9edcd579905d2d77bab",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.get_num_common_prefix_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1396
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_new_reqs.extend",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1401
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "scheduled_resumed_reqs.clear",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1402
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "10d9d2deec85a095334a",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "NewRequestData.from_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1404
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "get_block_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1406
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "10d9d2deec85a095334a",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "NewRequestData.from_request",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1414
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "get_block_ids",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1416
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d41b039e1828cf4c2d75",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "record_function_or_nullcontext",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1422
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d0c623ea286344e4f24a",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._make_cached_request_data",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1423
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.prev_step_scheduled_req_ids.clear",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1433
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.prev_step_scheduled_req_ids.update",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1434
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "num_scheduled_tokens.keys",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1434
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "2794ccaecd2bcfaf5a40",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.take_boundary_state_offloads",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1439
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "set",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1446
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "block_state_req_ids.update",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1447
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "bc052ec817e266be868d",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "KVConnectorBlockState",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1450
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "4252b5ae89eb98ad5608",
+        "type": "calls",
+        "status": "inferred",
+        "confidence": "medium",
+        "label": "self.kv_cache_manager.take_kv_cache_block_copies",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1457
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "523b47c66b25252c196e",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._free_cow_retained_blocks",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1464
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1469
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "len",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1471
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "4b51e7dfe982159111f1",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._make_scheduled_encoder_input_stats",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1479
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d317f88afe5f37b7e29d",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "SchedulerOutput",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1483
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.encoder_cache_manager.get_freed_mm_hashes",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1498
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "cb8d4fe1e19d7d8dd120",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._get_new_block_ids_to_zero",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1499
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.encoder_cache_manager.get_manager_metadata",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1504
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "ed6ed332ae47ab8898cf",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._build_kv_connector_meta",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1512
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.aux_output_connector.build_connector_meta",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1517
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": null,
+        "type": "calls",
+        "status": "unresolved",
+        "confidence": "low",
+        "label": "self.ec_connector.build_connector_meta",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1524
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "d41b039e1828cf4c2d75",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "record_function_or_nullcontext",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1537
+      },
+      {
+        "sourceId": "be61a94f35c34a65f548",
+        "targetId": "e849592059ed042dbbc4",
+        "type": "calls",
+        "status": "resolved",
+        "confidence": "high",
+        "label": "self._update_after_schedule",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\core\\sched\\scheduler.py",
+        "line": 1538
+      }
+    ],
+    "graphTruncated": false,
+    "EngineCore": [
+      {
+        "id": "0166269ddeffc19cea6e",
+        "qualifiedName": "rust.src.engine-core-client.src.tests.python_compat.EngineCoreSamplingParams",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\rust\\src\\engine-core-client\\src\\tests\\python_compat.py",
+        "startLine": 35
+      },
+      {
+        "id": "9e019d8a3bf3491cd0a3",
+        "qualifiedName": "rust.src.engine-core-client.src.tests.python_compat.EngineCoreRequest",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\rust\\src\\engine-core-client\\src\\tests\\python_compat.py",
+        "startLine": 68
+      },
+      {
+        "id": "e735f8d98e4f341c5ed9",
+        "qualifiedName": "rust.src.engine-core-client.src.tests.python_compat.EngineCoreOutput",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\rust\\src\\engine-core-client\\src\\tests\\python_compat.py",
+        "startLine": 97
+      },
+      {
+        "id": "1bcb1c628ddf9d7222fd",
+        "qualifiedName": "rust.src.engine-core-client.src.tests.python_compat.ExtendedEngineCoreOutput",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\rust\\src\\engine-core-client\\src\\tests\\python_compat.py",
+        "startLine": 122
+      },
+      {
+        "id": "000ba47d466a44662d48",
+        "qualifiedName": "rust.src.engine-core-client.src.tests.python_compat.EngineCoreOutputs",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\rust\\src\\engine-core-client\\src\\tests\\python_compat.py",
+        "startLine": 129
+      },
+      {
+        "id": "a2579c5cd8dc89acc02d",
+        "qualifiedName": "rust.src.engine-core-client.src.tests.python_compat.EngineCoreReadyResponse",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\rust\\src\\engine-core-client\\src\\tests\\python_compat.py",
+        "startLine": 448
+      },
+      {
+        "id": "36b1df2df22845495589",
+        "qualifiedName": "tests.v1.engine.test_core_engine_actor_manager._StubEngineCoreActor",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\v1\\engine\\test_core_engine_actor_manager.py",
+        "startLine": 31
+      },
+      {
+        "id": "a11d9ffee40b6ec5cc53",
+        "qualifiedName": "tests.v1.engine.test_iteration_logging.FakeEngineCore",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\v1\\engine\\test_iteration_logging.py",
+        "startLine": 12
+      },
+      {
+        "id": "ec941e5bf62714942813",
+        "qualifiedName": "tests.v1.engine.utils.MockEngineCore",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\v1\\engine\\utils.py",
+        "startLine": 319
+      },
+      {
+        "id": "c47b4836710336b6b949",
+        "qualifiedName": "vllm.v1.engine.EngineCoreReadyResponse",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\vllm\\v1\\engine\\__init__.py",
+        "startLine": 73
+      }
+    ],
+    "Executor": [
+      {
+        "id": "b382f9323f4496349287",
+        "qualifiedName": "tests.distributed.test_multiproc_executor.test_multiproc_executor_counts_all_local_dp_workers.StopExecutorInit",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\distributed\\test_multiproc_executor.py",
+        "startLine": 52
+      },
+      {
+        "id": "5509de32fd4038baaa4f",
+        "qualifiedName": "tests.distributed.test_ray_v2_executor_e2e._AsyncLLMActor",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\distributed\\test_ray_v2_executor_e2e.py",
+        "startLine": 39
+      },
+      {
+        "id": "b3b43acbdee9543ea465",
+        "qualifiedName": "tests.distributed.test_sharded_rdt_plan.TestRequiresTheRayExecutor",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\distributed\\test_sharded_rdt_plan.py",
+        "startLine": 1470
+      },
+      {
+        "id": "66d18bcf91dba3f269eb",
+        "qualifiedName": "tests.distributed.test_sharded_rdt_plan.TestRequiresTheRayExecutor.test_a_custom_executor_class_is_left_alone._CustomExecutor",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\distributed\\test_sharded_rdt_plan.py",
+        "startLine": 1502
+      },
+      {
+        "id": "844f19c9113c635432f9",
+        "qualifiedName": "tests.model_executor.kernels.test_b12x_linear.test_b12x_mxfp8_reload_reuses_packed_tensor_addresses.PackedWeight",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\model_executor\\kernels\\test_b12x_linear.py",
+        "startLine": 465
+      },
+      {
+        "id": "f01b4d870dacf07fb7ee",
+        "qualifiedName": "tests.model_executor.layers.test_fused_shared_expert._StubGlm5NextAttention",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\model_executor\\layers\\test_fused_shared_expert.py",
+        "startLine": 148
+      },
+      {
+        "id": "aa750e90bed4b621f608",
+        "qualifiedName": "tests.model_executor.layers.test_fused_shared_expert.test_deepseek_v4_shared_expert_fse_uses_mtp_quantization_config_prefix.DeepseekV4Config",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\model_executor\\layers\\test_fused_shared_expert.py",
+        "startLine": 424
+      },
+      {
+        "id": "dac776277b4d28a709be",
+        "qualifiedName": "tests.model_executor.layers.test_fused_shared_expert.test_is_model_fused_shared_expert_compatible.MoE",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\model_executor\\layers\\test_fused_shared_expert.py",
+        "startLine": 796
+      },
+      {
+        "id": "1533e754a12cc514bbc4",
+        "qualifiedName": "tests.model_executor.layers.test_fused_shared_expert.test_is_model_fused_shared_expert_compatible.Layer",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\model_executor\\layers\\test_fused_shared_expert.py",
+        "startLine": 801
+      },
+      {
+        "id": "57a546202c9572b06e54",
+        "qualifiedName": "tests.model_executor.layers.test_mla_short_prefill_indexer.test_sparse_attention_refreshes_batch_state_inside_eager_segment.BatchStateRefreshed",
+        "file": "C:\\Users\\liangji\\Documents\\Codex\\2026-10-07\\zhe\\work\\vllm\\tests\\model_executor\\layers\\test_mla_short_prefill_indexer.py",
+        "startLine": 25
+      }
+    ]
+  }
+}

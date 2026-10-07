@@ -1,0 +1,1495 @@
+我要开发一个用于阅读大型系统源码的 VS Code 插件。
+
+这个工具不是普通的代码编辑器，而是一个：
+
+**Large Codebase Architecture Explorer / Source Insight for Modern Systems**
+
+主要目标是帮助我理解：
+
+- vLLM
+- SGLang
+- PyTorch
+- CUDA 项目
+- C/C++ 系统项目
+- 最终包括 Linux Kernel
+
+这类大型源码。
+
+---
+
+# 一、产品目标
+
+传统 VS Code 更擅长：
+
+- 文件浏览
+- 搜索
+- Ctrl+Click 跳转定义
+- Find References
+- Outline
+- Git
+
+但是阅读大型系统源码时，我真正缺少的是：
+
+> “这个系统在架构上到底是怎么组织的？”
+
+我希望这个插件能够提供一种：
+
+**Architecture Navigation**
+
+而不仅仅是：
+
+**Symbol Navigation**
+
+传统阅读方式：
+
+文件
+→ 类
+→ 函数
+→ 定义
+
+我希望实现：
+
+系统
+→ 子系统
+→ 模块
+→ 类
+→ 接口
+→ 调用链
+→ 源码
+
+例如：
+
+vLLM
+→ Engine
+→ Scheduler
+→ KV Cache
+→ KVCacheManager
+→ allocate_slots()
+→ 源代码
+
+---
+
+# 二、第一阶段范围
+
+第一版不要试图直接支持 Linux Kernel。
+
+MVP 优先支持：
+
+- Python
+- vLLM
+- SGLang
+
+主要验证大型 Python 系统的架构分析能力。
+
+后续再扩展：
+
+- C++
+- CUDA
+- clangd
+- Linux Kernel
+
+因此第一阶段优先做到：
+
+1. Workspace 索引
+2. Module 分析
+3. Class 分析
+4. 成员变量分析
+5. Method 分析
+6. Inheritance Graph
+7. Module Dependency Graph
+8. Call Graph
+9. Callers / Callees
+10. Architecture Explorer
+11. AI Explain Module
+12. AI Explain Class
+13. VS Code 源码跳转
+
+---
+
+# 三、总体架构原则
+
+整个系统必须拆成两层：
+
+## Layer 1：VS Code Extension
+
+使用：
+
+- TypeScript
+- VS Code Extension API
+
+负责：
+
+- UI
+- Sidebar
+- TreeView
+- Webview
+- 命令
+- 当前编辑器上下文
+- 点击源码跳转
+- 与分析后端通信
+
+---
+
+## Layer 2：Code Analysis Engine
+
+第一版推荐 Python。
+
+负责：
+
+- 扫描源码
+- AST Parsing
+- Symbol Extraction
+- Dependency Analysis
+- Call Graph
+- Inheritance
+- Architecture Model
+- 数据持久化
+
+两层之间不要强耦合。
+
+推荐：
+
+VS Code Extension
+    ↓
+HTTP / JSON-RPC / stdio
+    ↓
+Code Analysis Engine
+    ↓
+AST / Tree-sitter / LSP
+    ↓
+Graph / Database
+
+未来即使我重新做独立 Desktop App，也可以复用 Analysis Engine。
+
+---
+
+# 四、项目目录建议
+
+建议类似：
+
+source-architecture-explorer/
+├── extension/
+│   ├── src/
+│   │   ├── extension.ts
+│   │   ├── commands/
+│   │   ├── providers/
+│   │   ├── views/
+│   │   ├── services/
+│   │   └── models/
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── indexer/
+│   │   ├── parsers/
+│   │   ├── graph/
+│   │   ├── models/
+│   │   ├── storage/
+│   │   └── services/
+│   ├── requirements.txt
+│   └── run.py
+│
+├── docs/
+├── README.md
+└── .gitignore
+
+可以根据实际工程调整。
+
+---
+
+# 五、第一阶段语言支持
+
+先做好 Python。
+
+优先使用：
+
+- Python ast
+- astroid
+- tree-sitter-python
+
+具体选型由你评估。
+
+第一版不要为了“统一所有语言”而过度抽象。
+
+但 Parser 接口要允许以后加入：
+
+- CParser
+- CppParser
+- CUDAParser
+
+例如：
+
+LanguageParser
+
+PythonParser
+CppParser
+CParser
+
+---
+
+# 六、Workspace Indexing
+
+当用户打开一个代码 Workspace 时：
+
+提供命令：
+
+Architecture Explorer: Index Workspace
+
+扫描：
+
+- .py
+- 后续可支持 .cpp/.h/.cu
+
+第一版默认忽略：
+
+- .git
+- .venv
+- venv
+- node_modules
+- build
+- dist
+- __pycache__
+- 第三方依赖目录
+
+允许配置 exclude pattern。
+
+例如：
+
+.architecture-explorer.json
+
+或者 VS Code settings。
+
+---
+
+# 七、需要提取的数据
+
+每个 Python Module：
+
+- module name
+- file path
+- imports
+- classes
+- functions
+- constants
+
+每个 Class：
+
+- name
+- qualified name
+- file
+- line
+- base classes
+- members
+- methods
+- decorators
+- docstring
+
+每个 Member：
+
+- name
+- inferred type
+- assignment location
+
+重点识别：
+
+self.xxx
+
+例如：
+
+class Scheduler:
+
+    def __init__(self):
+        self.running = []
+        self.waiting = []
+        self.kv_cache_manager = KVCacheManager(...)
+
+应该提取：
+
+Scheduler.members:
+
+running
+waiting
+kv_cache_manager
+
+并尽量推断：
+
+kv_cache_manager -> KVCacheManager
+
+---
+
+# 八、Method 信息
+
+每个 Method 保存：
+
+- name
+- qualified name
+- class
+- file
+- start line
+- end line
+- parameters
+- return annotation
+- calls
+- called_by
+- overrides
+- docstring
+
+例如：
+
+Scheduler.schedule
+
+calls:
+
+KVCacheManager.allocate_slots
+Scheduler._schedule_running
+Scheduler._schedule_waiting
+
+---
+
+# 九、Inheritance Graph
+
+建立类继承关系。
+
+例如：
+
+BaseExecutor
+    ↑
+Executor
+   / 
+  ↓   ↓
+MultiprocExecutor
+RayExecutor
+
+提供：
+
+- parents
+- children
+- overridden methods
+
+在 UI 中能够可视化。
+
+---
+
+# 十、Module Dependency Graph
+
+分析：
+
+import
+from ... import ...
+
+以及类之间的成员依赖。
+
+例如：
+
+Scheduler
+    ↓
+KVCacheManager
+    ↓
+BlockPool
+
+支持区分关系类型：
+
+- import
+- inheritance
+- owns/member
+- calls
+
+重要：
+
+大型项目不能默认把所有边全部显示，否则图会完全不可读。
+
+必须提供 Filter：
+
+[✓] inheritance
+[✓] member dependency
+[ ] import
+[ ] function calls
+
+---
+
+# 十一、Call Graph
+
+针对函数 / Method：
+
+提供：
+
+Show Call Graph
+
+例如：
+
+EngineCore.step
+    ↓
+Scheduler.schedule
+   /        
+  ↓          ↓
+KVCacheManager.allocate_slots
+SchedulerOutput
+
+支持两个方向：
+
+Callees
+
+当前函数调用了谁。
+
+Callers
+
+谁调用了当前函数。
+
+第一版 Python 静态分析无法解决全部动态调用是正常的。
+
+需要明确标记：
+
+Resolved
+
+Unresolved
+
+Dynamic
+
+不要伪造确定性。
+
+---
+
+# 十二、Architecture Explorer Sidebar
+
+新增 VS Code Activity Bar Icon：
+
+Architecture Explorer
+
+里面显示：
+
+ARCHITECTURE
+
+Workspace
+├── Modules
+├── Classes
+├── Call Graph
+├── Inheritance
+└── Architecture
+
+---
+
+# 十三、Module Browser
+
+例如：
+
+vLLM
+
+显示逻辑模块，而不仅仅是文件夹。
+
+第一版可以从物理 package/module 开始：
+
+vllm
+├── engine
+├── scheduler
+├── executor
+├── worker
+├── model_executor
+└── distributed
+
+后续增加 AI 或规则进行逻辑聚类。
+
+点击：
+
+scheduler
+
+显示：
+
+Module: vllm.v1.core.sched
+
+Files
+
+Classes
+
+Functions
+
+Depends On
+
+Used By
+
+---
+
+# 十四、Class Inspector
+
+用户点击一个 Class 后：
+
+打开一个 Webview。
+
+例如：
+
+Scheduler
+
+Defined In:
+vllm/v1/core/sched/scheduler.py
+
+Inheritance:
+object
+ ↑
+Scheduler
+
+Members:
+
+waiting
+running
+kv_cache_manager
+encoder_cache_manager
+
+Methods:
+
+schedule()
+add_request()
+finish_requests()
+update_from_output()
+
+Depends On:
+
+KVCacheManager
+Request
+SchedulerOutput
+
+Used By:
+
+EngineCore
+
+---
+
+# 十五、点击源码跳转
+
+所有：
+
+- Class
+- Method
+- Function
+- Module
+- Member
+
+都应该支持：
+
+点击
+→ 打开文件
+→ 跳转到定义行
+
+调用 VS Code API：
+
+vscode.window.showTextDocument
+
+Selection / Position
+
+这部分自己实现即可。
+
+不要重新实现编辑器。
+
+---
+
+# 十六、Ctrl + Click
+
+Ctrl+Click / Go to Definition：
+
+第一版直接继续使用：
+
+- Pylance
+- Pyright
+- VS Code
+
+已有语言能力。
+
+这个插件不要重新实现完整 LSP。
+
+我们的重点是：
+
+Architecture Analysis。
+
+---
+
+# 十七、Architecture Graph Webview
+
+使用 VS Code Webview。
+
+推荐考虑：
+
+- Cytoscape.js
+- D3.js
+- React Flow
+
+由你评估。
+
+要求：
+
+支持：
+
+- zoom
+- pan
+- node click
+- edge type
+- search
+- filter
+- focus node
+
+例如：
+
+EngineCore
+    ↓
+Scheduler
+ /     |       
+Request KVCache Encoder
+          |
+       BlockPool
+
+点击节点：
+
+Scheduler
+
+可以：
+
+- Open Source
+- Inspect Class
+- Show Call Graph
+- Show Dependencies
+
+---
+
+# 十八、图的可读性非常重要
+
+禁止：
+
+打开整个 Workspace 后直接画一个巨大 graph。
+
+必须采取：
+
+Focused Graph
+
+例如：
+
+当前 Class
+
+默认：
+
+depth = 1
+
+用户可以点击：
+
+Expand
+
+再扩展一层。
+
+支持：
+
+Depth:
+
+1
+2
+3
+
+否则 vLLM / Linux Kernel 会完全无法阅读。
+
+---
+
+# 十九、Architecture Hierarchy
+
+这是项目的关键创新功能之一。
+
+希望最终形成：
+
+System
+↓
+Subsystem
+↓
+Module
+↓
+Class
+↓
+Method
+
+第一版先实现：
+
+Workspace
+↓
+Python Package
+↓
+Module
+↓
+Class
+↓
+Method
+
+以后逐步加入：
+
+Subsystem / Logical Architecture。
+
+---
+
+# 二十、搜索
+
+实现：
+
+Architecture Explorer: Search Symbol
+
+支持搜索：
+
+Scheduler
+KVCacheManager
+allocate_slots
+
+结果显示：
+
+Class
+Method
+Function
+Module
+
+点击跳转。
+
+---
+
+# 二十一、当前源码 Context
+
+当用户正在编辑：
+
+scheduler.py
+
+并将光标放在：
+
+schedule()
+
+时：
+
+插件应该能够识别当前 symbol。
+
+提供命令：
+
+Architecture Explorer: Inspect Current Symbol
+
+直接打开：
+
+Scheduler.schedule
+
+对应的：
+
+- Call Graph
+- Callers
+- Callees
+- Class
+- Dependencies
+
+---
+
+# 二十二、Database / Storage
+
+第一版可以使用：
+
+SQLite
+
+保存：
+
+modules
+classes
+methods
+members
+relationships
+
+推荐 schema 类似：
+
+symbols
+
+id
+type
+name
+qualified_name
+file
+start_line
+end_line
+
+relationships
+
+source_id
+target_id
+type
+
+type：
+
+imports
+inherits
+calls
+owns
+references
+
+这样 Graph 查询比较方便。
+
+不要第一版就使用 Neo4j。
+
+---
+
+# 二十三、增量更新
+
+第一版完整 Workspace Index 即可。
+
+但是架构需要预留：
+
+file changed
+
+→ re-index file
+
+→ update database
+
+后续实现 incremental indexing。
+
+第一版如果实现容易，可以监听：
+
+onDidSaveTextDocument
+
+仅重新分析当前文件。
+
+---
+
+# 二十四、性能要求
+
+目标项目：
+
+vLLM
+
+数千个 Python 文件。
+
+要求：
+
+Indexing 不能卡死 VS Code UI。
+
+因此：
+
+索引必须在后端独立进程执行。
+
+Extension UI 不允许同步扫描大量文件。
+
+需要：
+
+progress indication
+
+例如：
+
+Indexing workspace
+
+437 / 1832 files
+
+---
+
+# 二十五、AI 功能
+
+第一版 AI 不是主功能。
+
+但架构要预留：
+
+Explain Class
+
+Explain Module
+
+Explain Call Chain
+
+例如：
+
+用户点击：
+
+Scheduler
+
+点击：
+
+AI Explain
+
+不要直接把整个源码库喂给 LLM。
+
+应该先构造结构化 context：
+
+Class:
+Scheduler
+
+Members:
+running
+waiting
+kv_cache_manager
+
+Methods:
+schedule
+add_request
+finish_requests
+
+Calls:
+KVCacheManager.allocate_slots
+
+Called by:
+EngineCore
+
+Dependencies:
+Request
+SchedulerOutput
+
+然后再生成 Prompt。
+
+AI Provider 第一版可以先抽象接口：
+
+AIProvider
+
+例如：
+
+OpenAIProvider
+FutureLocalProvider
+
+如果没有 API Key：
+
+AI 功能 disabled。
+
+不要让 AI 成为 MVP 的依赖。
+
+---
+
+# 二十六、准确性原则
+
+静态代码分析一定存在不确定性。
+
+尤其 Python 有：
+
+- dynamic dispatch
+- monkey patch
+- decorators
+- getattr
+- runtime import
+
+因此每个关系可以增加：
+
+confidence
+
+例如：
+
+HIGH
+MEDIUM
+LOW
+
+或者：
+
+STATIC
+INFERRED
+UNRESOLVED
+
+不要向用户展示错误的“绝对确定关系”。
+
+---
+
+# 二十七、第一阶段暂时不做
+
+MVP 不要实现：
+
+- Linux Kernel 全量解析
+- C++ 模板完整解析
+- CUDA AST
+- 编译数据库
+- Kconfig
+- Makefile
+- Neo4j
+- Cloud backend
+- 多用户
+- Collaboration
+- GitHub SaaS
+- Embedding database
+- RAG
+- Agent 自动改代码
+
+这些以后再做。
+
+---
+
+# 二十八、第一阶段 UI
+
+至少实现以下 Views：
+
+Architecture Explorer
+├── Overview
+├── Modules
+├── Classes
+├── Inheritance
+└── Call Graph
+
+点击 Class：
+
+Class Inspector
+
+点击 Method：
+
+Method Inspector
+
+点击 Graph：
+
+Architecture Graph
+
+---
+
+# 二十九、建议 Commands
+
+注册：
+
+Architecture Explorer: Index Workspace
+
+Architecture Explorer: Reindex Workspace
+
+Architecture Explorer: Open Architecture
+
+Architecture Explorer: Inspect Current Symbol
+
+Architecture Explorer: Show Call Graph
+
+Architecture Explorer: Show Inheritance
+
+Architecture Explorer: Search Symbol
+
+---
+
+# 三十、vLLM 验证
+
+MVP 开发完成后：
+
+使用真实 vLLM 源码测试。
+
+不要只用 toy project。
+
+至少选择几个典型模块：
+
+- Scheduler
+- KV Cache
+- EngineCore
+- Executor
+
+验证：
+
+### Test 1
+
+能找到 Scheduler。
+
+### Test 2
+
+显示 Scheduler 的：
+
+members
+methods
+file
+
+### Test 3
+
+能正确识别：
+
+Scheduler
+→ KVCacheManager
+
+的依赖关系。
+
+### Test 4
+
+能够画：
+
+Scheduler inheritance graph
+
+如果没有父类也正常显示。
+
+### Test 5
+
+能够查看：
+
+schedule()
+
+call graph。
+
+### Test 6
+
+点击 graph node：
+
+跳转真实源码。
+
+### Test 7
+
+搜索：
+
+KVCacheManager
+
+能定位。
+
+### Test 8
+
+vLLM Workspace 索引过程不会卡死 VS Code。
+
+---
+
+# 三十一、优先关注的产品体验
+
+这个软件主要是为了让我：
+
+第一次打开一个陌生的大型项目时，
+
+快速回答：
+
+1. 这个项目有哪些主要模块？
+2. 模块之间如何关联？
+3. 一个 Class 的职责是什么？
+4. 它有哪些成员变量？
+5. 它提供哪些接口？
+6. 它依赖哪些 Class？
+7. 谁使用它？
+8. 一个函数调用链是什么？
+9. 一个类继承体系是什么？
+10. 如何快速从架构跳转到真实源码？
+
+所有设计都围绕这个目标。
+
+---
+
+# 三十二、不要做成普通 UML 工具
+
+我不需要一个：
+
+“扫描代码 → 自动生成一张巨大的 UML 图”
+
+这种工具。
+
+真正需要的是：
+
+**Interactive Architecture Navigation**
+
+用户从一个节点开始：
+
+Scheduler
+
+然后：
+
+Inspect
+→ Dependency
+→ KVCacheManager
+→ BlockPool
+→ allocate_slots
+
+逐步探索。
+
+重点：
+
+Context
+
+Focus
+
+Navigation
+
+而不是一次展示全部。
+
+---
+
+# 三十三、第一版设计风格
+
+整体 UI 风格：
+
+Developer Tool
+
+类似：
+
+VS Code
+Source Insight
+GitLens
+Profiler
+
+不要：
+
+- 花哨动画
+- 大量渐变
+- Dashboard 套模板
+- 卡片式 SaaS UI
+
+强调：
+
+- 信息密度
+- 层级
+- 可读性
+- 快速导航
+
+---
+
+# 三十四、开发步骤
+
+请不要一次性盲目把所有东西写完。
+
+建议按照以下顺序实施：
+
+Phase 1
+
+创建 VS Code Extension。
+
+确认 Sidebar 和 Command 正常。
+
+Phase 2
+
+创建 Python Analysis Backend。
+
+实现：
+
+Workspace scan
+
+Python AST
+
+Class / Method extraction。
+
+Phase 3
+
+建立 SQLite symbol database。
+
+Phase 4
+
+Extension 与 Backend 通信。
+
+Phase 5
+
+实现：
+
+Modules
+Classes
+Class Inspector
+
+Phase 6
+
+Inheritance Graph。
+
+Phase 7
+
+Module Dependency Graph。
+
+Phase 8
+
+Function Call Graph。
+
+Phase 9
+
+源码跳转。
+
+Phase 10
+
+使用真实 vLLM 测试。
+
+每完成一个阶段都实际运行测试。
+
+---
+
+# 三十五、开发要求
+
+你可以：
+
+- 创建文件
+- 安装合理依赖
+- 运行 npm
+- 运行 Python
+- 编译 Extension
+- 启动 Extension Development Host
+- 编写测试
+- 修复 bug
+
+不要只是输出代码片段让我自己拼。
+
+目标是直接构建一个：
+
+可以运行的 VS Code 插件工程。
+
+---
+
+# 三十六、代码质量要求
+
+要求：
+
+- TypeScript strict
+- Python type hints
+- 模块职责明确
+- 不堆一个大文件
+- 有基本 error handling
+- 有 logging
+- 有 README
+- 不过度工程化
+
+---
+
+# 三十七、README
+
+至少写清：
+
+1. 项目目标
+2. Architecture
+3. Extension 安装
+4. Backend 安装
+5. 如何运行开发版本
+6. 如何 Index Workspace
+7. 当前支持的语言
+8. 当前已实现关系
+9. 静态分析限制
+10. vLLM 测试方式
+11. 后续路线
+
+---
+
+# 三十八、未来 Roadmap
+
+README 记录但暂不实现：
+
+## V2
+
+SGLang 完整支持
+
+Incremental indexing
+
+AI Architecture Summary
+
+Markdown architecture report
+
+## V3
+
+C/C++
+
+clangd
+
+compile_commands.json
+
+Tree-sitter C++
+
+## V4
+
+CUDA
+
+C++ / CUDA cross-language graph
+
+## V5
+
+Linux Kernel
+
+C AST
+clangd
+compile_commands
+macros
+function pointers
+Kconfig
+Makefile
+
+---
+
+# 三十九、非常重要的架构要求
+
+不要让 VS Code Extension 成为整个产品本体。
+
+真正的核心应该是：
+
+Code Analysis Engine
+
+即：
+
+                   Code Analysis Engine
+                          │
+              ┌───────────┴───────────┐
+              ↓                       ↓
+      VS Code Extension        Future Desktop App
+
+这样未来我如果不想继续依赖 VS Code，可以重新做：
+
+Tauri / Electron Desktop
+
+但是：
+
+Indexer
+Parser
+Graph
+Database
+Architecture Model
+
+全部继续复用。
+
+---
+
+# 四十、最终验收
+
+最终至少让我能够：
+
+打开 vLLM 源码
+
+↓
+
+点击：
+
+Index Workspace
+
+↓
+
+看到：
+
+Architecture Explorer
+
+↓
+
+找到：
+
+Scheduler
+
+↓
+
+打开 Class Inspector
+
+看到：
+
+- 定义文件
+- 成员属性
+- methods
+- dependencies
+- callers / users
+
+↓
+
+点击：
+
+schedule
+
+↓
+
+查看：
+
+Call Graph
+
+↓
+
+点击：
+
+KVCacheManager.allocate_slots
+
+↓
+
+直接跳转到真实源码
+
+↓
+
+打开：
+
+Architecture Graph
+
+看到 Scheduler 周围一层依赖关系
+
+这条链路能够稳定运行，就视为第一版 MVP 成功。
+
+---
+
+现在请你：
+
+1. 检查当前开发环境
+2. 创建项目
+3. 初始化 VS Code Extension
+4. 创建 Python Backend
+5. 按上述 Phase 顺序实现
+6. 实际编译和测试
+7. 尽量使用真实 vLLM repo 验证，而不是只写 Demo
+
+如果开发过程中发现某项静态分析能力实现成本明显超出 MVP，可以采用简化版本，但必须保持数据模型和架构可扩展。
+
+最终请给我：
+
+1. 当前项目路径
+2. 整体架构
+3. 已完成的功能
+4. 如何启动 Backend
+5. 如何运行 VS Code Extension
+6. 如何对 vLLM 建立索引
+7. 当前实际测试结果
+8. 已知限制
+9. 下一步最值得实现的功能
+
+请直接开始实现，不要只给设计建议。

@@ -1,0 +1,47 @@
+{
+  "actual": {
+    "protocol": {
+      "index": {
+        "files": 2,
+        "symbols": 6
+      },
+      "queryInspectGraph": {
+        "query": true,
+        "inspect": true,
+        "graph": true
+      }
+    },
+    "cancellation": {
+      "requestRejected": true,
+      "processKilled": true
+    },
+    "persistence": {
+      "rootSwitch": true,
+      "databaseCount": 2
+    }
+  },
+  "mockedWebview": {
+    "inspectorScriptCount": 1,
+    "graphScriptCount": 2,
+    "inspectorActions": [
+      {
+        "command": "architectureExplorer.showCalls",
+        "id": "50a8d32a0484fab636b3"
+      }
+    ],
+    "sourceOpenCount": 1,
+    "graphRequests": 4,
+    "landingMainPanel": true,
+    "landingActions": {
+      "choose": 1,
+      "index": 1
+    },
+    "structureSignature": true,
+    "classOverview": true,
+    "moduleGraph": true,
+    "graphInlineRuntime": true,
+    "staleInspectGuard": true,
+    "incomingCallLabel": "run"
+  },
+  "note": "Python protocol/process checks are real. VS Code panel and webview checks use a minimal mock; no graphical rendering claim is made."
+}

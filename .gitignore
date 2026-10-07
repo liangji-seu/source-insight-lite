@@ -1,0 +1,9 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.sqlite*
+*.vsix
+extension/backend/
+extension/media/cytoscape.min.js
+architecture-backend-*/

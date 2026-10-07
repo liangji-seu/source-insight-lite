@@ -1,0 +1,93 @@
+{
+  "name": "source-architecture-explorer",
+  "displayName": "源码架构探索器",
+  "description": "从源码索引开始，逐步查看模块、类、继承、依赖和调用关系。",
+  "version": "0.3.0",
+  "publisher": "local-dev",
+  "license": "MIT",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onView:architectureExplorer.workspace",
+    "onView:architectureExplorer.files",
+    "onView:architectureExplorer.currentStructure",
+    "onCommand:architectureExplorer.index",
+    "onCommand:architectureExplorer.reindex",
+    "onCommand:architectureExplorer.openArchitecture",
+    "onCommand:architectureExplorer.inspectCurrent",
+    "onCommand:architectureExplorer.showCalls",
+    "onCommand:architectureExplorer.showCallers",
+    "onCommand:architectureExplorer.showInheritance",
+    "onCommand:architectureExplorer.showDependencies",
+    "onCommand:architectureExplorer.showModuleGraph",
+    "onCommand:architectureExplorer.showClassGraph",
+    "onCommand:architectureExplorer.searchSymbol",
+    "onCommand:architectureExplorer.copyAIContext"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "architectureExplorer", "title": "源码架构", "icon": "media/icon.svg" }]
+    },
+    "views": {
+      "architectureExplorer": [
+        { "id": "architectureExplorer.workspace", "name": "工作区", "type": "webview" },
+        { "id": "architectureExplorer.files", "name": "文件", "type": "tree" },
+        { "id": "architectureExplorer.currentStructure", "name": "当前文件结构", "type": "tree" }
+      ]
+    },
+    "viewsWelcome": [
+      { "view": "architectureExplorer.workspace", "contents": "选择源码目录，然后点击解析。" }
+    ],
+    "commands": [
+      { "command": "architectureExplorer.index", "title": "解析", "icon": "$(database)" },
+      { "command": "architectureExplorer.reindex", "title": "重新解析", "icon": "$(refresh)" },
+      { "command": "architectureExplorer.showModuleGraph", "title": "模块关系" },
+      { "command": "architectureExplorer.showClassGraph", "title": "类关系" },
+      { "command": "architectureExplorer.inspectCurrent", "title": "查看光标所在符号" },
+      { "command": "architectureExplorer.openSource", "title": "查看源码" },
+      { "command": "architectureExplorer.showCalls", "title": "查看调用关系" },
+      { "command": "architectureExplorer.showCallers", "title": "查看谁调用它" },
+      { "command": "architectureExplorer.showInheritance", "title": "查看继承关系" },
+      { "command": "architectureExplorer.showDependencies", "title": "查看依赖关系" },
+      { "command": "architectureExplorer.searchSymbol", "title": "搜索类 / 函数", "icon": "$(search)" },
+      { "command": "architectureExplorer.copyAIContext", "title": "复制 AI 解释上下文", "icon": "$(copy)" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "architectureExplorer.openArchitecture", "when": "false" },
+        { "command": "architectureExplorer.inspectCurrent", "when": "false" },
+        { "command": "architectureExplorer.inspectSymbol", "when": "false" },
+        { "command": "architectureExplorer.openSource", "when": "false" },
+        { "command": "architectureExplorer.openSourceSymbol", "when": "false" },
+        { "command": "architectureExplorer.showCalls", "when": "false" },
+        { "command": "architectureExplorer.showCallers", "when": "false" },
+        { "command": "architectureExplorer.showInheritance", "when": "false" },
+        { "command": "architectureExplorer.showDependencies", "when": "false" },
+        { "command": "architectureExplorer.searchSymbol", "when": "false" },
+        { "command": "architectureExplorer.copyAIContext", "when": "false" }
+      ]
+    },
+    "configuration": {
+      "title": "源码架构探索器",
+      "properties": {
+        "architectureExplorer.pythonPath": { "type": "string", "default": "", "description": "解析引擎使用的 Python 路径；留空使用系统默认值。" },
+        "architectureExplorer.excludes": { "type": "array", "items": { "type": "string" }, "default": [], "description": "解析时额外排除的目录名称。" }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "npm run bundle-backend && tsc -p ./tsconfig.json",
+    "bundle-backend": "node ./scripts/bundle-backend.js",
+    "build": "npm run compile",
+    "watch": "tsc -w -p ./tsconfig.json",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "dependencies": { "cytoscape": "^3.30.4" },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.7.2"
+  }
+}
